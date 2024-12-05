@@ -1,27 +1,33 @@
 CREATE OR REPLACE FUNCTION url_d(input text) RETURNS text LANGUAGE plpgsql IMMUTABLE STRICT AS $$
-DECLARE bin bytea := '';
--- Ініціалізація порожнього бінарного значення
-byte text;
-BEGIN raise log '01--%',
-input;
--- Проходимо по всіх символах рядка
-FOR byte IN (
-    select (
-            regexp_matches(input, '(%[0-9A-Fa-f]{2}|.)', 'g')
-        ) [1]
-) LOOP IF length(byte) = 3 THEN -- Якщо це закодований символ (наприклад, %20), то декодуємо
-bin := bin || decode(substring(byte, 2, 2), 'hex');
-ELSE -- Інакше просто додаємо символ як є
-bin := bin || convert_to(byte, 'UTF8');
-END IF;
-END LOOP;
--- Перетворюємо бінарні дані в рядок у кодуванні UTF-8
-RETURN convert_from(bin, 'UTF8');
+DECLARE 
+    bin bytea := ''; -- Инициализация пустого бинарного значения
+    byte text; -- Переменная для обработки символов
+BEGIN 
+    RAISE LOG '01--%', input; -- Логируем входное значение
+
+    -- Цикл по всем символам строки
+    FOR byte IN (
+        SELECT (regexp_matches(input, '(%[0-9A-Fa-f]{2}|.)', 'g'))[1]
+    ) LOOP
+        -- Если символ закодирован, декодируем
+        IF length(byte) = 3 THEN
+            bin := bin || decode(substring(byte, 2, 2), 'hex');
+        ELSE 
+            -- Если символ обычный, добавляем его в результат
+            bin := bin || convert_to(byte, 'UTF8');
+        END IF;
+    END LOOP;
+
+    -- Преобразуем бинарное значение обратно в текст
+    RETURN convert_from(bin, 'UTF8');
+
 EXCEPTION
-WHEN OTHERS THEN raise log '02--Помилка при декодуванні: %',
-byte;
-RETURN NULL;
+    -- Обработка ошибок с логированием и возвратом NULL
+    WHEN OTHERS THEN 
+        RAISE LOG '02--Помилка при декодуванні: %', byte;
+        RETURN NULL;
 END $$;
+
 WITH 
 fb_merged AS (
     SELECT
